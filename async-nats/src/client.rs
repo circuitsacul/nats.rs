@@ -85,6 +85,7 @@ fn max_payload_error(sizes: (usize, usize)) -> PublishError {
     )
 }
 
+#[derive(Debug)]
 pub(crate) struct RequestDropGuard {
     receiver: oneshot::Receiver<Message>,
     respond: Option<Subject>,
