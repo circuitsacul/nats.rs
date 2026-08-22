@@ -392,6 +392,9 @@ pub(crate) enum Command {
         headers: Option<HeaderMap>,
         sender: oneshot::Sender<Message>,
     },
+    DiscardRespond {
+        respond: Subject,
+    },
     Subscribe {
         sid: u64,
         subject: Subject,
@@ -930,6 +933,16 @@ impl ConnectionHandler {
                 };
 
                 self.connection.enqueue_write_op(&pub_op);
+            }
+
+            Command::DiscardRespond { respond } => {
+                let Some(multiplexer) = self.multiplexer.as_mut() else {
+                    return;
+                };
+
+                let (_prefix, token) = respond.rsplit_once('.').expect("malformed subject");
+
+                multiplexer.senders.remove(token);
             }
 
             Command::Publish(OutboundMessage {
