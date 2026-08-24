@@ -226,7 +226,6 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio::io;
 use tokio::sync::mpsc;
-use tokio::task;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -1123,6 +1122,8 @@ pub async fn connect_with_options<A: ToServerAddrs>(
     let (info_sender, info_watcher) = tokio::sync::watch::channel(info.clone());
     let (sender, mut receiver) = mpsc::channel(options.sender_capacity);
 
+    let handle = tokio::runtime::Handle::current();
+
     let client = Client::new(
         info_watcher,
         state_rx,
@@ -1133,9 +1134,10 @@ pub async fn connect_with_options<A: ToServerAddrs>(
         max_payload,
         statistics,
         options.skip_subject_validation,
+        handle.clone(),
     );
 
-    task::spawn(async move {
+    handle.spawn(async move {
         while let Some(event) = events_rx.recv().await {
             tracing::info!("event: {}", event);
             if let Some(event_callback) = &options.event_callback {
@@ -1144,7 +1146,7 @@ pub async fn connect_with_options<A: ToServerAddrs>(
         }
     });
 
-    task::spawn(async move {
+    handle.spawn(async move {
         if connection.is_none() && options.retry_on_initial_connect {
             let (info, connection_ok) = match connector.connect().await {
                 Ok((info, connection)) => (info, connection),

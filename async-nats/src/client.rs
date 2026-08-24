@@ -89,6 +89,7 @@ fn max_payload_error(sizes: (usize, usize)) -> PublishError {
 pub(crate) struct RequestDropGuard {
     receiver: oneshot::Receiver<Message>,
     respond: Option<Subject>,
+    tokio_runtime_handle: tokio::runtime::Handle,
     client_sender: mpsc::WeakSender<Command>,
 }
 
@@ -96,11 +97,13 @@ impl RequestDropGuard {
     fn new(
         receiver: oneshot::Receiver<Message>,
         respond: Subject,
+        tokio_runtime_handle: tokio::runtime::Handle,
         client_sender: mpsc::WeakSender<Command>,
     ) -> Self {
         Self {
             receiver,
             respond: Some(respond),
+            tokio_runtime_handle,
             client_sender,
         }
     }
@@ -143,12 +146,8 @@ impl Drop for RequestDropGuard {
             Err(err) => err.into_inner(),
         };
 
-        // fall-back to using the runtime, but only if one is available
-        let Ok(rt) = tokio::runtime::Handle::try_current() else {
-            return;
-        };
-
-        rt.spawn(async move {
+        // fall-back to using the runtime
+        self.tokio_runtime_handle.spawn(async move {
             let _ = client_sender.send(op).await;
         });
     }
@@ -170,6 +169,7 @@ pub struct Client {
     max_payload: Arc<AtomicUsize>,
     connection_stats: Arc<Statistics>,
     skip_subject_validation: bool,
+    tokio_runtime_handle: tokio::runtime::Handle,
 }
 
 pub mod traits {
@@ -312,6 +312,7 @@ impl Client {
         max_payload: Arc<AtomicUsize>,
         statistics: Arc<Statistics>,
         skip_subject_validation: bool,
+        tokio_runtime_handle: tokio::runtime::Handle,
     ) -> Client {
         let poll_sender = PollSender::new(sender.clone());
         Client {
@@ -326,6 +327,7 @@ impl Client {
             max_payload,
             connection_stats: statistics,
             skip_subject_validation,
+            tokio_runtime_handle,
         }
     }
 
@@ -840,7 +842,12 @@ impl Client {
             })
             .await?;
 
-        let guard = RequestDropGuard::new(receiver, respond, self.sender.downgrade());
+        let guard = RequestDropGuard::new(
+            receiver,
+            respond,
+            self.tokio_runtime_handle.clone(),
+            self.sender.downgrade(),
+        );
         Ok(guard)
     }
 
