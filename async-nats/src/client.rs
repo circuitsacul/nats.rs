@@ -1153,6 +1153,16 @@ impl Client {
     pub fn statistics(&self) -> Arc<Statistics> {
         self.connection_stats.clone()
     }
+
+    #[cfg(test)]
+    async fn multiplexer_stats(
+        &self,
+    ) -> Result<crate::MultiplexerStats, Box<dyn std::error::Error>> {
+        let (tx, rx) = oneshot::channel();
+
+        self.sender.send(Command::MultiplexerStats(tx)).await?;
+        Ok(rx.await?)
+    }
 }
 
 /// Used for building customized requests.
@@ -1427,4 +1437,41 @@ pub struct Statistics {
     /// Number of times connection was established.
     /// Initial connect will be counted as well, then all successful reconnects.
     pub connects: AtomicU64,
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+    use futures_util::StreamExt as _;
+
+    #[tokio::test]
+    async fn request_with_no_response_does_not_leak_memory() {
+        const SUBJECT: &str = "horizon";
+
+        let server = nats_server::run_basic_server();
+        let client = crate::connect(server.client_url()).await.unwrap();
+        let mut subscriber = client.subscribe(SUBJECT).await.unwrap();
+        client.flush().await.unwrap();
+
+        let stats = client.multiplexer_stats().await.unwrap();
+        assert_eq!(stats.waiting_senders, 0);
+
+        {
+            let request = client.request(SUBJECT, Bytes::from_static(b"spaceship"));
+            tokio::pin!(request);
+
+            tokio::select! {
+                result = &mut request => panic!("request unexpectedly completed: {result:?}"),
+                message = subscriber.next() => {
+                    message.expect("subscriber should receive the request");
+                }
+            }
+
+            let stats = client.multiplexer_stats().await.unwrap();
+            assert_eq!(stats.waiting_senders, 1);
+        }
+
+        let stats = client.multiplexer_stats().await.unwrap();
+        assert_eq!(stats.waiting_senders, 0);
+    }
 }

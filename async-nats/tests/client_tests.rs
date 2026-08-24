@@ -1874,32 +1874,4 @@ mod client {
             "disconnected too early ({elapsed:?}) to be the ping keepalive"
         );
     }
-
-    #[tokio::test]
-    async fn request_with_no_response_does_not_leak_memory() {
-        const SUBJECT: &str = "horizon";
-
-        let server = nats_server::run_basic_server();
-        let client = async_nats::connect(server.client_url()).await.unwrap();
-
-        let barrier = Arc::new(tokio::sync::Barrier::new(2));
-
-        let black_hole = tokio::spawn({
-            let client = client.clone();
-            let barrier = barrier.clone();
-            async move {
-                let mut sub = client.subscribe(SUBJECT).await.unwrap();
-                barrier.wait().await;
-
-                while let Some(event) = sub.next().await {
-                    drop(event); // gobble gobble
-                }
-            }
-        });
-
-        barrier.wait().await;
-        client.flush().await.unwrap();
-
-        todo!();
-    }
 }

@@ -381,9 +381,17 @@ pub(crate) enum ServerOp {
 )]
 pub type PublishMessage = crate::message::OutboundMessage;
 
+#[cfg(test)]
+#[derive(Debug)]
+struct MultiplexerStats {
+    pub waiting_senders: usize,
+}
+
 /// `Command` represents all commands that a [`Client`] can handle
 #[derive(Debug)]
 pub(crate) enum Command {
+    #[cfg(test)]
+    MultiplexerStats(oneshot::Sender<MultiplexerStats>),
     Publish(OutboundMessage),
     Request {
         subject: Subject,
@@ -825,6 +833,20 @@ impl ConnectionHandler {
 
     fn handle_command(&mut self, command: Command) {
         match command {
+            #[cfg(test)]
+            Command::MultiplexerStats(observer) => {
+                let stats = MultiplexerStats {
+                    waiting_senders: self
+                        .multiplexer
+                        .as_ref()
+                        .map(|v| v.senders.len())
+                        .unwrap_or(0),
+                };
+
+                if let Err(err) = observer.send(stats) {
+                    tracing::warn!(?err);
+                }
+            }
             Command::Unsubscribe { sid, max } => {
                 if let Some(subscription) = self.subscriptions.get_mut(&sid) {
                     subscription.max = max;
