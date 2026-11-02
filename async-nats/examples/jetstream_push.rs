@@ -28,11 +28,12 @@ async fn main() -> Result<(), async_nats::Error> {
         })
         .await?
         // Then, on that `Stream` use method to create Consumer and bind to it too.
-        .create_consumer(jetstream::consumer::push::Config {
-            deliver_subject: inbox.clone(),
-            inactive_threshold: Duration::from_secs(60),
-            ..Default::default()
-        })
+        .create_consumer(
+            jetstream::consumer::push::Config::builder()
+                .deliver_subject(inbox.clone())
+                .inactive_threshold(Duration::from_secs(60))
+                .build(),
+        )
         .await?;
 
     // Publish a few messages for the example.

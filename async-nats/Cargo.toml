@@ -14,6 +14,7 @@ keywords = ["nats", "client", "messaging", "api"]
 categories = ["network-programming", "api-bindings"]
 
 [dependencies]
+bon = { version = "3", optional = true }
 aws-lc-rs = { version = "1.18", optional = true }
 memchr = "2.4"
 bytes = { version = "1.11.1", features = ["serde"] }
@@ -89,6 +90,8 @@ nkeys = ["dep:nkeys", "dep:base64"]
 # Use NUID for generating unique IDs (inbox subjects, object store nonces).
 # When disabled, falls back to rand-based alphanumeric ID generation.
 nuid = ["dep:nuid"]
+# Enable bon typestate builders
+bon = ["dep:bon"]
 # All experimental features are part of this feature flag.
 experimental = []
 # Features that require nats-server version 2.10 or higher.

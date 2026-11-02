@@ -171,6 +171,8 @@ impl futures_util::Stream for Messages {
 /// `durable_name` and `deliver_subject` fields have a particularly
 /// strong influence on the consumer's overall behavior.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "bon", derive(bon::Builder))]
+#[cfg_attr(feature = "bon", builder(on(_, default), state_mod(vis = "pub")))]
 pub struct Config {
     /// The delivery subject used by the push consumer.
     #[serde(default)]
